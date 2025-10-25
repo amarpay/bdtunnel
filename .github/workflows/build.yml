@@ -3,16 +3,13 @@ name: Build APK
 on:
   workflow_dispatch:
     inputs:
-      release_tag: bdtunnel-v1.0.1 
-      required: true
-      type: string
+      release_tag:
+        required: false
+        type: string
   push:
     branches:
       - master
-
-env:
-  RELEASE_TAG: ${{ github.event.inputs.release_tag || format('auto-release-{0}', github.run_id) }}
-
+ 
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -50,8 +47,9 @@ jobs:
 
     - name: Build libtun2socks
       if: steps.cache-libtun2socks-restore.outputs.cache-hit != 'true'
-      run: bash compile-tun2socks.sh
-
+      run: |
+        bash compile-tun2socks.sh
+    
     - name: Save libtun2socks
       if: steps.cache-libtun2socks-restore.outputs.cache-hit != 'true'
       uses: actions/cache/save@v4
@@ -60,12 +58,14 @@ jobs:
         key: libtun2socks-${{ runner.os }}-${{ env.NDK_HOME }}-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD') }}-${{ hashFiles('.git/modules/badvpn/HEAD') }}-${{ hashFiles('.git/modules/libancillary/HEAD') }}
 
     - name: Copy libtun2socks
-      run: cp -r ${{ github.workspace }}/libs ${{ github.workspace }}/V2rayNG/app
+      run: |
+        cp -r ${{ github.workspace }}/libs ${{ github.workspace }}/V2rayNG/app
 
     - name: Fetch AndroidLibXrayLite tag
       run: |
         pushd AndroidLibXrayLite
         CURRENT_TAG=$(git describe --tags --abbrev=0)
+        echo "Current tag in this repo: $CURRENT_TAG"
         echo "CURRENT_TAG=$CURRENT_TAG" >> $GITHUB_ENV
         popd
 
@@ -93,7 +93,8 @@ jobs:
 
     - name: Build libhysteria2
       if: steps.cache-libhysteria2-restore.outputs.cache-hit != 'true'
-      run: bash libhysteria2.sh
+      run: |
+        bash libhysteria2.sh
 
     - name: Save libhysteria2
       if: steps.cache-libhysteria2-restore.outputs.cache-hit != 'true'
@@ -103,7 +104,8 @@ jobs:
         key: libhysteria2-${{ runner.os }}-${{ env.NDK_HOME }}-${{ hashFiles('.git/modules/hysteria/HEAD') }}-${{ hashFiles('libhysteria2.sh') }}
 
     - name: Copy libhysteria2
-      run: cp -r ${{ github.workspace }}/hysteria/libs ${{ github.workspace }}/V2rayNG/app
+      run: |
+        cp -r ${{ github.workspace }}/hysteria/libs ${{ github.workspace }}/V2rayNG/app
 
     - name: Setup Java
       uses: actions/setup-java@v4.7.0
@@ -125,19 +127,33 @@ jobs:
         chmod 755 gradlew
         ./gradlew licenseFdroidReleaseReport
         ./gradlew assembleRelease -Pandroid.injected.signing.store.file=${{ steps.android_keystore.outputs.filePath }} -Pandroid.injected.signing.store.password=${{ secrets.APP_KEYSTORE_PASSWORD }} -Pandroid.injected.signing.key.alias=${{ secrets.APP_KEYSTORE_ALIAS }} -Pandroid.injected.signing.key.password=${{ secrets.APP_KEY_PASSWORD }}
-
-    - name: Upload all APKs
+    
+    - name: Upload arm64-v8a APK
       uses: actions/upload-artifact@v4.6.2
-      if: success()
+      if: ${{  success() }}
       with:
-        name: all-apks
-        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*.apk
+        name: arm64-v8a
+        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*arm64-v8a*.apk
 
-    - name: Upload to GitHub Release
-      uses: svenstaro/upload-release-action@v2
-      if: success()
+    - name: Upload armeabi-v7a APK
+      uses: actions/upload-artifact@v4.6.2
+      if: ${{  success() }}
       with:
-        file: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*.apk
-        tag: ${{ env.RELEASE_TAG }}
+        name: armeabi-v7a
+        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*armeabi-v7a*.apk
+
+    - name: Upload x86 APK
+      uses: actions/upload-artifact@v4.6.2
+      if: ${{  success() }}
+      with:
+        name: x86-apk
+        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*x86*.apk
+
+    - name: Upload to release
+      uses: svenstaro/upload-release-action@v2
+      if: github.event.inputs.release_tag != ''
+      with:
+        file: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*playstore*/release/*.apk
+        tag: ${{ github.event.inputs.release_tag }}
         file_glob: true
         prerelease: true
