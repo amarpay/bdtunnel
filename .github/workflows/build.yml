@@ -3,7 +3,7 @@ name: Build APK
 on:
   workflow_dispatch:
     inputs:
-      release_tag: bdtunnel-v1.0.0 
+      release_tag: bdtunnel-v1.0.1 
       required: true
       type: string
   push:
